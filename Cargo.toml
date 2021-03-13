@@ -1,8 +1,21 @@
 [package]
-name = "polymorphic_constant"
+name = "polymorphic-constant"
 version = "0.1.0"
-authors = ["Louis Garczynski"]
 edition = "2018"
+
+authors = ["Louis Garczynski <louis.roc@gmail.com>"]
+repository = "https://github.com/lgarczyn/polymorphic-constant"
+license = "MIT"
+license-file = "./LICENSE"
+description = "A macro to define a numerical constant in multiple types at once"
+keywords = ["constant", "static", "type", "polymorphic", "overflow"]
+
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md"
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
