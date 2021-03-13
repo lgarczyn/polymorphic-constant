@@ -1,4 +1,4 @@
-# Polymorphic Constant
+# polymorphic-constant
 
 A macro to generate numerical constants in multiple types at once.
 
@@ -48,7 +48,7 @@ A few features are supported:
     // You can handle constants like any static struct
     static PI_COPY: PI = PI;
     static PI_F32: f32 = PI.f32;
-    
+
     // Into is implemented for every variant of the constant
     fn times_pi<T: std::ops::Mul<T>> (value: T) -> <T as std::ops::Mul>::Output
     where
@@ -67,75 +67,43 @@ This system ensures that you keep all the safeties and warnings given by rust, b
 Any incompatible type will prevent compilation:
 
 * Float literals cannot be stored if it would convert them to infinity
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
-    # }
+```rust
+static FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
 ```
 
 * Literals cannot be stored in a type too small to hold them
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAILS: u64 | nz_i8 = 128;
-    # }
+```rust
+static FAILS: u64 | nz_i8 = 128;
 ```
 
 * Negative numbers cannot be stored in unsigned types
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAILS: i64 | u8 = -1;
-    # }
+```rust
+static FAILS: i64 | u8 = -1;
 ```
 
 * 0 cannot be stored in non-zero types
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
-    # }
+```rust
+static FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
 ```
 
 * However, floats may lose precision, and a lot of it
 ```rust
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static SUCCEEDS: f32 = 3.141592653589793238462643383279;
-    # }
+static SUCCEEDS: f32 = 3.141592653589793238462643383279;
 ```
 
 ## Warnings
 
 Currently, the same constant cannot hold both int and float variants
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAIL: i32 = 0.1;
-    # }
+```rust
+    static FAIL: i32 = 0.1;
 ```
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAIL: f32 = 0;
-    # }
+```rust
+    static FAIL: f32 = 0;
 ```
 
 The constant also has to be initialized with an untyped literal
-```compile_fail
-    # use polymorphic_constant::polymorphic_constant;
-    
-    # polymorphic_constant! {
-        static FAIL: i32 = 0u32;
-    # }
+```rust
+    static FAIL: i32 = 0u32;
 ```
 
 It is still unclear if accepting the examples above could be dangerous,
@@ -143,7 +111,7 @@ thus the conservative choice.
 
 ## Example
 
-```
+```rust
 use polymorphic_constant::polymorphic_constant;
 
 polymorphic_constant! {
@@ -165,3 +133,5 @@ fn main() {
 ## Support
 
 I would love any feedback on usage, for future ameliorations and features.
+
+License: MIT
