@@ -176,16 +176,18 @@ I would love any feedback on usage, for future ameliorations and features.
 */
 
 /**
-Define one or more polymorphic numerical constants.
- * A constant X of value 10, available in i32 and u32 will read:
-```ignore
+Define one or more polymorphic numerical constants. A constant X of value 10, available in i32 and u32 will read:
+```
+# use polymorphic_constant::polymorphic_constant;
 polymorphic_constant! {
     static X: i32 | u32 = 10;
 }
 ```
-and be accessed as:
-```ignore
-let x_f32 = X.f32;
+and be used like:
+```
+# use polymorphic_constant::polymorphic_constant;
+# polymorphic_constant! { static X: i32 | u32 = 10; }
+let x_i32 = X.i32;
 ```
 */
 
