@@ -27,7 +27,6 @@ let x_f32 = X.f32;
 ```
 */
 
-#[cfg(not(doc))]
 #[macro_export]
 macro_rules! polymorphic_constant {
     ($(#[$attr:meta])* ($($vis:tt)*) static $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
@@ -111,10 +110,4 @@ macro_rules! polymorphic_constant {
     (@GET_TYPE nz_u128 ) => { ::std::num::NonZeroU128 };
     (@GET_TYPE nz_usize) => { ::std::num::NonZeroUsize };
     (@GET_TYPE $numeric_type:ident) => { $numeric_type };
-}
-
-// Simpler macro definition for documentation
-#[cfg(doc)]
-macro_rules! polymorphic_constant {
-    (static $name:ident : $( $numeric_type:ident )|* = $lit:literal;) => {};
 }
