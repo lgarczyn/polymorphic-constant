@@ -1,11 +1,11 @@
 [package]
 name = "polymorphic-constant"
-version = "0.1.2"
+version = "0.1.4"
 edition = "2018"
 
 authors = ["Louis Garczynski <louis.roc@gmail.com>"]
 repository = "https://github.com/lgarczyn/polymorphic-constant"
-license-file = "./LICENSE"
+license = "MIT"
 description = "A macro to define a numerical constant in multiple types at once"
 keywords = ["constant", "static", "type", "polymorphic", "overflow"]
 
@@ -15,3 +15,7 @@ include = [
     "LICENSE",
     "README.md"
 ]
+
+[badges]
+github = { repository = "lgarczyn/polymorphic-constant" }
+maintenance = { status = "actively-developed" }

@@ -1,3 +1,6 @@
+[![Workflow Status](https://github.com/lgarczyn/polymorphic-constant/workflows/main/badge.svg)](https://github.com/lgarczyn/polymorphic-constant/actions?query=workflow%3A%22main%22)
+![Maintenance](https://img.shields.io/badge/maintenance-activly--developed-brightgreen.svg)
+
 # polymorphic-constant
 
 A macro to generate numerical constants in multiple types at once.
