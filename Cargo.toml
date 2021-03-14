@@ -1,13 +1,13 @@
 [package]
 name = "polymorphic-constant"
-version = "0.1.6"
+version = "0.2.0"
 edition = "2018"
 
 authors = ["Louis Garczynski <louis.roc@gmail.com>"]
 repository = "https://github.com/lgarczyn/polymorphic-constant"
 license = "MIT"
 description = "A macro to define a numerical constant in multiple types at once"
-keywords = ["constant", "static", "type", "polymorphic", "overflow"]
+keywords = ["constant", "const", "type", "polymorphic", "overflow"]
 
 include = [
     "**/*.rs",

@@ -21,7 +21,7 @@ This is meant as a temporary fix to the year-long debate over [Rust Pre-RFC #133
     use polymorphic_constant::polymorphic_constant;
 
     polymorphic_constant! {
-        static PI: f32 | f64 = 3.141592653589793;
+        const PI: f32 | f64 = 3.141592653589793;
     }
 
     // Which can then be used as
@@ -39,18 +39,18 @@ A few features are supported:
     polymorphic_constant! {
 
         /// Doc comment attributes
-        static PI: f32 | f64 = 3.141592653589793;
+        const PI: f32 | f64 = 3.141592653589793;
 
         // Visibility modifiers (for both constant and type)
-        pub (crate) static E: f32 | f64 = 2.7182818284590452;
+        pub (crate) const E: f32 | f64 = 2.7182818284590452;
 
         // Nonzero numeric types (NonZeroI32, NonZeroU8, etc)
-        static ASCII_LINE_RETURN: u8 | nz_u8 = 10;
+        const ASCII_LINE_RETURN: u8 | nz_u8 = 10;
     }
 
-    // You can handle constants like any static struct
-    static PI_COPY: PI = PI;
-    static PI_F32: f32 = PI.f32;
+    // You can handle constants like any const struct
+    const PI_COPY: PI = PI;
+    const PI_F32: f32 = PI.f32;
 
     // Into is implemented for every variant of the constant
     fn times_pi<T: std::ops::Mul<T>> (value: T) -> <T as std::ops::Mul>::Output
@@ -71,42 +71,42 @@ Any incompatible type will prevent compilation:
 
 * Float literals cannot be stored if it would convert them to infinity
 ```rust
-static FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
+const FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
 ```
 
 * Literals cannot be stored in a type too small to hold them
 ```rust
-static FAILS: u64 | nz_i8 = 128;
+const FAILS: u64 | nz_i8 = 128;
 ```
 
 * Negative numbers cannot be stored in unsigned types
 ```rust
-static FAILS: i64 | u8 = -1;
+const FAILS: i64 | u8 = -1;
 ```
 
 * 0 cannot be stored in non-zero types
 ```rust
-static FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
+const FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
 ```
 
 * However, floats may lose precision, and a lot of it
 ```rust
-static SUCCEEDS: f32 = 3.141592653589793238462643383279;
+const SUCCEEDS: f32 = 3.141592653589793238462643383279;
 ```
 
 ## Warnings
 
 Currently, the same constant cannot hold both int and float variants
 ```rust
-    static FAIL: i32 = 0.1;
+    const FAIL: i32 = 0.1;
 ```
 ```rust
-    static FAIL: f32 = 0;
+    const FAIL: f32 = 0;
 ```
 
 The constant also has to be initialized with an untyped literal
 ```rust
-    static FAIL: i32 = 0u32;
+    const FAIL: i32 = 0u32;
 ```
 
 It is still unclear if accepting the examples above could be dangerous,
@@ -118,8 +118,8 @@ thus the conservative choice.
 use polymorphic_constant::polymorphic_constant;
 
 polymorphic_constant! {
-    static HEIGHT: i8 | u8 | i16 | u16 | i32 | u32 = 16;
-    static WIDTH: i8 | u8 | i16 | u16 | i32 | u32 = 32;
+    const HEIGHT: i8 | u8 | i16 | u16 | i32 | u32 = 16;
+    const WIDTH: i8 | u8 | i16 | u16 | i32 | u32 = 32;
 }
 
 fn main() {

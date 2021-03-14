@@ -26,7 +26,7 @@ This is meant as a temporary fix to the year-long debate over [Rust Pre-RFC #133
     use polymorphic_constant::polymorphic_constant;
 
     polymorphic_constant! {
-        static PI: f32 | f64 = 3.141592653589793;
+        const PI: f32 | f64 = 3.141592653589793;
     }
 
     // Which can then be used as
@@ -44,18 +44,18 @@ A few features are supported:
     polymorphic_constant! {
 
         /// Doc comment attributes
-        static PI: f32 | f64 = 3.141592653589793;
+        const PI: f32 | f64 = 3.141592653589793;
 
         // Visibility modifiers (for both constant and type)
-        pub (crate) static E: f32 | f64 = 2.7182818284590452;
+        pub (crate) const E: f32 | f64 = 2.7182818284590452;
 
         // Nonzero numeric types (NonZeroI32, NonZeroU8, etc)
-        static ASCII_LINE_RETURN: u8 | nz_u8 = 10;
+        const ASCII_LINE_RETURN: u8 | nz_u8 = 10;
     }
 
-    // You can handle constants like any static struct
-    static PI_COPY: PI = PI;
-    static PI_F32: f32 = PI.f32;
+    // You can handle constants like any const struct
+    const PI_COPY: PI = PI;
+    const PI_F32: f32 = PI.f32;
     
     // Into is implemented for every variant of the constant
     fn times_pi<T: std::ops::Mul<T>> (value: T) -> <T as std::ops::Mul>::Output
@@ -79,7 +79,7 @@ Any incompatible type will prevent compilation:
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
+        const FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
     # }
 ```
 
@@ -88,7 +88,7 @@ Any incompatible type will prevent compilation:
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAILS: u64 | nz_i8 = 128;
+        const FAILS: u64 | nz_i8 = 128;
     # }
 ```
 
@@ -97,7 +97,7 @@ Any incompatible type will prevent compilation:
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAILS: i64 | u8 = -1;
+        const FAILS: i64 | u8 = -1;
     # }
 ```
 
@@ -106,7 +106,7 @@ Any incompatible type will prevent compilation:
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
+        const FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
     # }
 ```
 
@@ -115,7 +115,7 @@ Any incompatible type will prevent compilation:
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static SUCCEEDS: f32 = 3.141592653589793238462643383279;
+        const SUCCEEDS: f32 = 3.141592653589793238462643383279;
     # }
 ```
 
@@ -126,14 +126,14 @@ Currently, the same constant cannot hold both int and float variants
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAIL: i32 = 0.1;
+        const FAIL: i32 = 0.1;
     # }
 ```
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAIL: f32 = 0;
+        const FAIL: f32 = 0;
     # }
 ```
 
@@ -142,7 +142,7 @@ The constant also has to be initialized with an untyped literal
     # use polymorphic_constant::polymorphic_constant;
     
     # polymorphic_constant! {
-        static FAIL: i32 = 0u32;
+        const FAIL: i32 = 0u32;
     # }
 ```
 
@@ -155,8 +155,8 @@ thus the conservative choice.
 use polymorphic_constant::polymorphic_constant;
 
 polymorphic_constant! {
-    static HEIGHT: i8 | u8 | i16 | u16 | i32 | u32 = 16;
-    static WIDTH: i8 | u8 | i16 | u16 | i32 | u32 = 32;
+    const HEIGHT: i8 | u8 | i16 | u16 | i32 | u32 = 16;
+    const WIDTH: i8 | u8 | i16 | u16 | i32 | u32 = 32;
 }
 
 fn main() {
@@ -180,21 +180,21 @@ Define one or more polymorphic numerical constants. A constant X of value 10, av
 ```
 # use polymorphic_constant::polymorphic_constant;
 polymorphic_constant! {
-    static X: i32 | u32 = 10;
+    const X: i32 | u32 = 10;
 }
 ```
 and be used like:
 ```
 # use polymorphic_constant::polymorphic_constant;
-# polymorphic_constant! { static X: i32 | u32 = 10; }
+# polymorphic_constant! { const X: i32 | u32 = 10; }
 let x_i32 = X.i32;
 ```
 */
 
 #[macro_export(local_inner_macros)]
 macro_rules! polymorphic_constant {
-    // Handle the static (pub?) CONST format
-    ($(#[$attr:meta])* ($($vis:tt)*) static $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
+    // Handle the const (pub?) CONST format
+    ($(#[$attr:meta])* ($($vis:tt)*) const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
 
         // Generate the struct to hold the constant
 
@@ -222,25 +222,25 @@ macro_rules! polymorphic_constant {
         // Expand the visibility, this time for the constant
         $($vis)*
         // Instantiate the struct and create the constant
-        static $name: $name = $name {
+        const $name: $name = $name {
             $($numeric_type: __nz_impl!(@MAKE_VAL $lit, $numeric_type ),)*
         };
         // Keep munching until the next ;
         polymorphic_constant!($($nextLine)*);
     };
 
-    // Handle `static CONST` format
-    ($(#[$attr:meta])* static $($t:tt)*) => {
+    // Handle `const CONST` format
+    ($(#[$attr:meta])* const $($t:tt)*) => {
         // use `()` to explicitly forward the information about private items
-        polymorphic_constant!($(#[$attr])* () static $($t)*);
+        polymorphic_constant!($(#[$attr])* () const $($t)*);
     };
-    // Handle `pub static CONST` format
-    ($(#[$attr:meta])* pub static $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub) static $($t)*);
+    // Handle `pub const CONST` format
+    ($(#[$attr:meta])* pub const $($t:tt)*) => {
+        polymorphic_constant!($(#[$attr])* (pub) const $($t)*);
     };
     // Handle `pub (crate) CONST` format and similar
-    ($(#[$attr:meta])* pub ($($vis:tt)+) static $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub ($($vis)+)) static $($t)*);
+    ($(#[$attr:meta])* pub ($($vis:tt)+) const $($t:tt)*) => {
+        polymorphic_constant!($(#[$attr])* (pub ($($vis)+)) const $($t)*);
     };
     () => {};
 }
@@ -248,7 +248,7 @@ macro_rules! polymorphic_constant {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __nz_impl {
-    // Statically obtain a nonzero struct
+    // constally obtain a nonzero struct
     // Surprisingly fails to compile if $lit is 0 or not in range
     (@MAKE_VAL $lit:literal, nz_i8   ) => { unsafe { ::std::num::NonZeroI8::new_unchecked($lit) } };
     (@MAKE_VAL $lit:literal, nz_i16  ) => { unsafe { ::std::num::NonZeroI16::new_unchecked($lit) } };

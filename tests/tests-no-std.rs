@@ -4,14 +4,14 @@
 use polymorphic_constant::polymorphic_constant;
 
 polymorphic_constant! {
-    static PI: f32 | f64 = 3.141592653589793;
-    pub (crate) static E: f32 | f64 = 2.7182818284590452353602874713526624977572;
-    pub static UINT: u16 | u32 | u64 | usize | i16 | i32 | i64 | isize = 2047;
-    pub static INT: i16 | i32 | i64 | isize = -2047;
+    const PI: f32 | f64 = 3.141592653589793;
+    pub (crate) const E: f32 | f64 = 2.7182818284590452353602874713526624977572;
+    pub const UINT: u16 | u32 | u64 | usize | i16 | i32 | i64 | isize = 2047;
+    pub const INT: i16 | i32 | i64 | isize = -2047;
 }
 
 #[test]
-fn test_static() {
+fn test_const() {
     assert_eq!(PI.f32, 3.141592653589793);
     assert_eq!(PI.f64, 3.141592653589793);
     assert_eq!(E.f32, 2.718281828459045235360287471f32);
@@ -39,7 +39,7 @@ fn test_copy() {
 #[test]
 fn test_local() {
     polymorphic_constant! {
-        static TEST: u16 | u8 = 35;
+        const TEST: u16 | u8 = 35;
     };
 
     assert_eq!(TEST.u16, 35);
