@@ -5,8 +5,6 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-#![no_std]
-
 /*!
 A macro to generate numerical constants in multiple types at once.
 
@@ -54,13 +52,13 @@ A few features are supported:
     }
 
     // You can handle constants like any const struct
-    const PI_COPY: PI = PI;
+    const PI_COPY: PolymorphicConstantPi = PI;
     const PI_F32: f32 = PI.f32;
-    
+
     // Into is implemented for every variant of the constant
     fn times_pi<T: std::ops::Mul<T>> (value: T) -> <T as std::ops::Mul>::Output
     where
-        PI: Into<T>,
+        PolymorphicConstantPi: Into<T>,
     {
         value * PI.into()
     }
@@ -77,7 +75,6 @@ Any incompatible type will prevent compilation:
 * Float literals cannot be stored if it would convert them to infinity
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAILS: f32 | f64 =  3141592653589793238462643383279502884197.0;
     # }
@@ -86,7 +83,6 @@ Any incompatible type will prevent compilation:
 * Literals cannot be stored in a type too small to hold them
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAILS: u64 | nz_i8 = 128;
     # }
@@ -95,7 +91,6 @@ Any incompatible type will prevent compilation:
 * Negative numbers cannot be stored in unsigned types
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAILS: i64 | u8 = -1;
     # }
@@ -104,7 +99,6 @@ Any incompatible type will prevent compilation:
 * 0 cannot be stored in non-zero types
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
     # }
@@ -113,7 +107,6 @@ Any incompatible type will prevent compilation:
 * However, floats may lose precision, and a lot of it
 ```rust
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const SUCCEEDS: f32 = 3.141592653589793238462643383279;
     # }
@@ -124,14 +117,12 @@ Any incompatible type will prevent compilation:
 Currently, the same constant cannot hold both int and float variants
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAIL: i32 = 0.1;
     # }
 ```
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAIL: f32 = 0;
     # }
@@ -140,7 +131,6 @@ Currently, the same constant cannot hold both int and float variants
 The constant also has to be initialized with an untyped literal
 ```compile_fail
     # use polymorphic_constant::polymorphic_constant;
-    
     # polymorphic_constant! {
         const FAIL: i32 = 0u32;
     # }
@@ -190,93 +180,265 @@ and be used like:
 let x_i32 = X.i32;
 ```
 */
+use convert_case::{Case, Casing};
+use proc_macro::{TokenStream as TokenStreamOut};
+use proc_macro2::{TokenStream, TokenTree};
+use quote::{format_ident, quote, ToTokens};
+use std::collections::HashMap;
+use syn::parse::{Parse, ParseStream, Result};
+use syn::{parse_macro_input, parse_quote, Attribute, Expr, Ident, Token, Type, Visibility};
 
-#[macro_export(local_inner_macros)]
-macro_rules! polymorphic_constant {
-    // Handle the const (pub?) CONST format
-    ($(#[$attr:meta])* ($($vis:tt)*) const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
+type ExpWrapper = fn(TokenStream, Type) -> TokenStream;
 
-        // Generate the struct to hold the constant
-
-        // Remove warnings
-        #[allow(non_camel_case_types)]
-        // Derive the common traits, but only if std is available
-        #[cfg_attr(not(no_std), derive(Debug, Clone, Copy))]
-        // Expend the attributes passed by the user
-        $(#[$attr])*
-        // Add the visibility attributes
-        $($vis)*
-        // Create the struct
-        struct $name {
-            // For each type (f32, ...) create a new property
-            $($numeric_type: __nz_impl!(@GET_TYPE $numeric_type),)*
-        }
-
-        // Implement `into` for every type
-        $(impl ::core::convert::Into<__nz_impl!(@GET_TYPE $numeric_type)> for $name {
-            fn into(self) -> __nz_impl!(@GET_TYPE $numeric_type) {
-                self.$numeric_type
-            }
-        })*
-
-        // Expand the visibility, this time for the constant
-        $($vis)*
-        // Instantiate the struct and create the constant
-        const $name: $name = $name {
-            $($numeric_type: __nz_impl!(@MAKE_VAL $lit, $numeric_type ),)*
-        };
-        // Keep munching until the next ;
-        polymorphic_constant!($($nextLine)*);
-    };
-
-    // Handle `const CONST` format
-    ($(#[$attr:meta])* const $($t:tt)*) => {
-        // use `()` to explicitly forward the information about private items
-        polymorphic_constant!($(#[$attr])* () const $($t)*);
-    };
-    // Handle `pub const CONST` format
-    ($(#[$attr:meta])* pub const $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub) const $($t)*);
-    };
-    // Handle `pub (crate) CONST` format and similar
-    ($(#[$attr:meta])* pub ($($vis:tt)+) const $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub ($($vis)+)) const $($t)*);
-    };
-    () => {};
+// Holds a single type variant of a constant
+struct PolymorphicVariant {
+    name: Ident,
+    token: Type,
+    init_wrapper: ExpWrapper,
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __nz_impl {
-    // constally obtain a nonzero struct
-    // Surprisingly fails to compile if $lit is 0 or not in range
-    (@MAKE_VAL $lit:literal, nz_i8   ) => { unsafe { ::std::num::NonZeroI8::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_i16  ) => { unsafe { ::std::num::NonZeroI16::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_i32  ) => { unsafe { ::std::num::NonZeroI32::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_i64  ) => { unsafe { ::std::num::NonZeroI64::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_i128 ) => { unsafe { ::std::num::NonZeroI128::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_isize) => { unsafe { ::std::num::NonZeroIsize::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_u8   ) => { unsafe { ::std::num::NonZeroU8::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_u16  ) => { unsafe { ::std::num::NonZeroU16::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_u32  ) => { unsafe { ::std::num::NonZeroU32::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_u64  ) => { unsafe { ::std::num::NonZeroU64::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_u128 ) => { unsafe { ::std::num::NonZeroU128::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, nz_usize) => { unsafe { ::std::num::NonZeroUsize::new_unchecked($lit) } };
-    (@MAKE_VAL $lit:literal, $numeric_type:ident) => { $lit };
+// Holds all type variants of a constant
+struct PolymorphicType {
+    variants: Vec<PolymorphicVariant>,
+}
 
-    // Get the full nonzero type from shorthand
-    // Fails in nonstd
-    (@GET_TYPE nz_i8   ) => { ::std::num::NonZeroI8 };
-    (@GET_TYPE nz_i16  ) => { ::std::num::NonZeroI16 };
-    (@GET_TYPE nz_i32  ) => { ::std::num::NonZeroI32 };
-    (@GET_TYPE nz_i64  ) => { ::std::num::NonZeroI64 };
-    (@GET_TYPE nz_i128 ) => { ::std::num::NonZeroI128 };
-    (@GET_TYPE nz_isize) => { ::std::num::NonZeroIsize };
-    (@GET_TYPE nz_u8   ) => { ::std::num::NonZeroU8 };
-    (@GET_TYPE nz_u16  ) => { ::std::num::NonZeroU16 };
-    (@GET_TYPE nz_u32  ) => { ::std::num::NonZeroU32 };
-    (@GET_TYPE nz_u64  ) => { ::std::num::NonZeroU64 };
-    (@GET_TYPE nz_u128 ) => { ::std::num::NonZeroU128 };
-    (@GET_TYPE nz_usize) => { ::std::num::NonZeroUsize };
-    (@GET_TYPE $numeric_type:ident) => { $numeric_type };
+// Holds all the information related to a constant
+struct PolymorphicConstant {
+    attributes: Vec<Attribute>,
+    visibility: Visibility,
+    const_name: Ident,
+    struct_name: Ident,
+    types: PolymorphicType,
+    init: Expr,
+}
+
+// Holds an entire multi-constant declaration
+struct PolymorphicConstantVec {
+    constants: Vec<PolymorphicConstant>,
+}
+
+//
+impl PolymorphicVariant {
+    fn null_wrapper(expr: TokenStream, ty: Type) -> TokenStream {
+        quote! {
+            unsafe { (#expr) as #ty }
+        }
+    }
+
+    fn nz_wrapper(expr: TokenStream, ty: Type) -> TokenStream {
+        quote! {
+            unsafe { #ty::new_unchecked(#expr) }
+        }
+    }
+
+    fn get_init(&self, expr: TokenStream) -> TokenStream {
+        (self.init_wrapper)(expr, self.token.clone())
+    }
+}
+
+// Implements the parsing of a constant type
+impl Parse for PolymorphicVariant {
+    fn parse(input: ParseStream) -> Result<Self> {
+        // Get the type
+        // Stored as ident to allow for NonZero types
+        // Problem: users cannot use type aliases for primitives nor nz types
+        let name: Ident = input.parse()?;
+
+        // Get the two possible wrappers
+        // Wrappers simply handle the initialization of variants based on their type
+        // Only used for nonzero types
+        // TODO: read up on hygienic types 
+        let nz_wrapper = PolymorphicVariant::nz_wrapper as ExpWrapper;
+        let null_wrapper = PolymorphicVariant::null_wrapper as ExpWrapper;
+
+        let (init_wrapper, token): (ExpWrapper, Type) = match name.to_string().as_str() {
+            "nz_i8" => (nz_wrapper, parse_quote! { ::std::num::NonZeroI8 }),
+            "nz_i16" => (nz_wrapper, parse_quote! { ::std::num::NonZeroI16 }),
+            "nz_i32" => (nz_wrapper, parse_quote! { ::std::num::NonZeroI32 }),
+            "nz_i64" => (nz_wrapper, parse_quote! { ::std::num::NonZeroI64 }),
+            "nz_i128" => (nz_wrapper, parse_quote! { ::std::num::NonZeroI128 }),
+            "nz_isize" => (nz_wrapper, parse_quote! { ::std::num::NonZeroIsize }),
+            "nz_u8" => (nz_wrapper, parse_quote! { ::std::num::NonZeroU8 }),
+            "nz_u16" => (nz_wrapper, parse_quote! { ::std::num::NonZeroU16 }),
+            "nz_u32" => (nz_wrapper, parse_quote! { ::std::num::NonZeroU32 }),
+            "nz_u64" => (nz_wrapper, parse_quote! { ::std::num::NonZeroU64 }),
+            "nz_u128" => (nz_wrapper, parse_quote! { ::std::num::NonZeroU128 }),
+            "nz_usize" => (nz_wrapper, parse_quote! { ::std::num::NonZeroUsize }),
+            _ => (null_wrapper, parse_quote! { #name }),
+        };
+
+        Ok(PolymorphicVariant {
+            name,
+            token,
+            init_wrapper,
+        })
+    }
+}
+
+// Parse the "TYPE | TYPE | TYPE" structure
+impl Parse for PolymorphicType {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut variants: Vec<PolymorphicVariant> = vec![input.parse()?];
+
+        while input.parse::<Token![|]>().is_ok() {
+            variants.push(input.parse()?);
+        }
+
+        Ok(PolymorphicType { variants })
+    }
+}
+
+// Parse the complete constant structure
+impl Parse for PolymorphicConstant {
+    fn parse(input: ParseStream) -> Result<Self> {
+
+        // Parse declaraction context
+        let attributes: Vec<Attribute> = Attribute::parse_outer(input)?;
+        let visibility: Visibility = input.parse()?;
+
+        // Parse "cont CONST_NAME :"    
+        input.parse::<Token![const]>()?;
+        let const_name: Ident = input.parse()?;
+        input.parse::<Token![:]>()?;
+
+        // Generate a struct name for the constant
+        // Has to 
+        let struct_name: Ident = format_ident!(
+            "PolymorphicConstant{}",
+            const_name.to_string().to_case(Case::UpperCamel)
+        );
+
+        let types: PolymorphicType = input.parse()?;
+
+        input.parse::<Token![=]>()?;
+        let init: Expr = input.parse()?;
+
+        Ok(PolymorphicConstant {
+            attributes,
+            visibility,
+            const_name,
+            struct_name,
+            types,
+            init,
+        })
+    }
+}
+
+impl Parse for PolymorphicConstantVec {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let constants: Vec<PolymorphicConstant> = input
+            .parse_terminated::<PolymorphicConstant, Token![;]>(PolymorphicConstant::parse)?
+            .into_iter()
+            .collect();
+
+        return Ok(PolymorphicConstantVec { constants });
+    }
+}
+
+type ConstDic = HashMap<String, TokenStream>;
+
+impl PolymorphicConstant {
+    fn init_parser(init: Expr, dictionary: &ConstDic) -> TokenStream {
+        init.into_token_stream()
+            .into_iter()
+            .map(|token| {
+                if let TokenTree::Ident(ref ident) = token {
+                    if let Some(expr) = dictionary.get(&ident.to_string()) {
+                        return expr.clone();
+                    }
+                }
+                TokenStream::from(token)
+            })
+            .flatten()
+            .collect()
+    }
+
+    fn to_tokens(self, dictionary: &mut ConstDic) -> Result<TokenStream> {
+        let PolymorphicConstant {
+            attributes,
+            visibility,
+            const_name,
+            struct_name,
+            types,
+            init,
+        } = self;
+
+        let init_replaced = PolymorphicConstant::init_parser(init.clone(), &dictionary);
+
+        dictionary.insert(const_name.to_string(), quote! {(#init)}.into());
+
+        let member_names: Vec<&Ident> = types.variants.iter().map(|t| &t.name).collect();
+
+        let variant_types: Vec<&Type> = types.variants.iter().map(|t| &t.token).collect();
+
+        let variant_inits: Vec<TokenStream> = types
+            .variants
+            .iter()
+            .map(|t| t.get_init(init_replaced.clone()))
+            .collect();
+
+        Ok(quote! {
+            // Derive the common traits, but only if std is available
+            // #[cfg_attr(not(no_std), derive(Debug, Clone, Copy))]
+            // Expend the attributes passed by the user
+            #(#attributes)*
+            // Add the visibility attributes
+            #visibility
+            // Create the struct
+            struct #struct_name {
+                #(
+                    #member_names: #variant_types,
+                )*
+            }
+
+            // Implements Into for each type
+            #(
+                impl ::core::convert::Into<#variant_types> for #struct_name {
+                    fn into(self) -> #variant_types {
+                        self.#member_names
+                    }
+                }
+            )*
+
+            // Expand the visibility, this time for the constant
+            #visibility
+            // Instantiate the struct and create the constant
+            const #const_name: #struct_name = #struct_name {
+                #(
+                    #member_names: #variant_inits,
+                )*
+            };
+        }
+        .into())
+    }
+}
+
+#[proc_macro]
+pub fn polymorphic_constant(input: TokenStreamOut) -> TokenStreamOut {
+    let PolymorphicConstantVec { constants } = parse_macro_input!(input as PolymorphicConstantVec);
+
+    let mut dictionary = HashMap::<String, TokenStream>::new();
+
+    // let nz_i8 = Ident::new("nz_i8", Span::def_site().into());
+    // let nz_i16 = Ident::new("nz_i16", Span::def_site().into());
+    // let nz_i32 = Ident::new("nz_i32", Span::def_site().into());
+    // let nz_i64 = Ident::new("nz_i64", Span::def_site().into());
+    // let nz_i128 = Ident::new("nz_i128", Span::def_site().into());
+    // let nz_isize = Ident::new("nz_isize", Span::def_site().into());
+    // let nz_u8 = Ident::new("nz_u8", Span::def_site().into());
+    // let nz_u16 = Ident::new("nz_u16", Span::def_site().into());
+    // let nz_u32 = Ident::new("nz_u32", Span::def_site().into());
+    // let nz_u64 = Ident::new("nz_u64", Span::def_site().into());
+    // let nz_u128 = Ident::new("nz_u128", Span::def_site().into());
+    // let nz_usize = Ident::new("nz_usize", Span::def_site().into());
+
+    (quote!{
+        const fn 
+    }).into_iter().chain(
+    constants
+        .into_iter()
+        .map(|pc| pc.to_tokens(&mut dictionary))
+        .flatten()
+    .collect::<TokenStream>())
+    .collect::<TokenStream>().into()
 }

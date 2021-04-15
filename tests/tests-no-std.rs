@@ -57,7 +57,7 @@ fn test_into() {
 fn test_template() {
     fn times_pi<T: core::ops::Mul<T>>(value: T) -> <T as core::ops::Mul>::Output
     where
-        PI: Into<T>,
+        PolymorphicConstantPi: Into<T>,
     {
         value * PI.into()
     }
