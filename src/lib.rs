@@ -194,7 +194,7 @@ let x_i32 = X.i32;
 #[macro_export(local_inner_macros)]
 macro_rules! polymorphic_constant {
     // Handle the const (pub?) CONST format
-    ($(#[$attr:meta])* ($($vis:tt)*) const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
+    ($(#[$attr:meta])* $vis:vis const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
 
         // Generate the struct to hold the constant
 
@@ -204,12 +204,10 @@ macro_rules! polymorphic_constant {
         #[cfg_attr(not(no_std), derive(Debug, Clone, Copy))]
         // Expend the attributes passed by the user
         $(#[$attr])*
-        // Add the visibility attributes
-        $($vis)*
         // Create the struct
-        struct $name {
+        $vis struct $name {
             // For each type (f32, ...) create a new property
-            $($numeric_type: __nz_impl!(@GET_TYPE $numeric_type),)*
+            $($vis $numeric_type: __nz_impl!(@GET_TYPE $numeric_type),)*
         }
 
         // Implement `into` for every type
@@ -219,10 +217,8 @@ macro_rules! polymorphic_constant {
             }
         })*
 
-        // Expand the visibility, this time for the constant
-        $($vis)*
         // Instantiate the struct and create the constant
-        const $name: $name = $name {
+        $vis const $name: $name = $name {
             $($numeric_type: __nz_impl!(@MAKE_VAL $lit, $numeric_type ),)*
         };
         // Keep munching until the next ;
