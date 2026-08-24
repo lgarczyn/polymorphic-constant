@@ -41,7 +41,7 @@ A few features are supported:
         /// Doc comment attributes
         const PI: f32 | f64 = 3.141592653589793;
 
-        // Visibility modifiers (for both constant and type)
+        // Visibility modifiers (constant, type and fields)
         pub (crate) const E: f32 | f64 = 2.7182818284590452;
 
         // Nonzero numeric types (NonZeroI32, NonZeroU8, etc)
