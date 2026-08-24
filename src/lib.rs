@@ -46,7 +46,7 @@ A few features are supported:
         /// Doc comment attributes
         const PI: f32 | f64 = 3.141592653589793;
 
-        // Visibility modifiers (for both constant and type)
+        // Visibility modifiers (constant, type and fields)
         pub (crate) const E: f32 | f64 = 2.7182818284590452;
 
         // Nonzero numeric types (NonZeroI32, NonZeroU8, etc)
@@ -108,6 +108,20 @@ Any incompatible type will prevent compilation:
     # polymorphic_constant! {
         const FAILS: nz_u8 | nz_u16 | nz_u32 = 0;
     # }
+```
+
+* A constant and its fields are never more visible than declared
+```compile_fail
+    # use polymorphic_constant::polymorphic_constant;
+
+    mod inner {
+        # use polymorphic_constant::polymorphic_constant;
+        polymorphic_constant! {
+            const HIDDEN: i32 = 1;
+        }
+    }
+
+    let fails = inner::HIDDEN.i32;
 ```
 
 * However, floats may lose precision, and a lot of it
@@ -193,8 +207,8 @@ let x_i32 = X.i32;
 
 #[macro_export(local_inner_macros)]
 macro_rules! polymorphic_constant {
-    // Handle the const (pub?) CONST format
-    ($(#[$attr:meta])* ($($vis:tt)*) const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
+    // Handle the (pub?) const CONST format
+    ($(#[$attr:meta])* $vis:vis const $name:ident : $( $numeric_type:ident )|* = $lit:literal; $($nextLine:tt)*) => {
 
         // Generate the struct to hold the constant
 
@@ -204,12 +218,10 @@ macro_rules! polymorphic_constant {
         #[cfg_attr(not(no_std), derive(Debug, Clone, Copy))]
         // Expend the attributes passed by the user
         $(#[$attr])*
-        // Add the visibility attributes
-        $($vis)*
         // Create the struct
-        struct $name {
-            // For each type (f32, ...) create a new property
-            $($numeric_type: __nz_impl!(@GET_TYPE $numeric_type),)*
+        $vis struct $name {
+            // Without $vis, `X.f32` is unreadable outside the defining module
+            $($vis $numeric_type: __nz_impl!(@GET_TYPE $numeric_type),)*
         }
 
         // Implement `into` for every type
@@ -219,29 +231,14 @@ macro_rules! polymorphic_constant {
             }
         })*
 
-        // Expand the visibility, this time for the constant
-        $($vis)*
         // Instantiate the struct and create the constant
-        const $name: $name = $name {
+        $vis const $name: $name = $name {
             $($numeric_type: __nz_impl!(@MAKE_VAL $lit, $numeric_type ),)*
         };
         // Keep munching until the next ;
         polymorphic_constant!($($nextLine)*);
     };
 
-    // Handle `const CONST` format
-    ($(#[$attr:meta])* const $($t:tt)*) => {
-        // use `()` to explicitly forward the information about private items
-        polymorphic_constant!($(#[$attr])* () const $($t)*);
-    };
-    // Handle `pub const CONST` format
-    ($(#[$attr:meta])* pub const $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub) const $($t)*);
-    };
-    // Handle `pub (crate) CONST` format and similar
-    ($(#[$attr:meta])* pub ($($vis:tt)+) const $($t:tt)*) => {
-        polymorphic_constant!($(#[$attr])* (pub ($($vis)+)) const $($t)*);
-    };
     () => {};
 }
 
